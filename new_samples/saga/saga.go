@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"go.uber.org/cadence/workflow"
-	"go.uber.org/zap"
 )
 
 // Saga collects compensations and runs them in reverse order to undo
@@ -28,7 +27,6 @@ func (s *Saga) Compensate(ctx workflow.Context) error {
 	for i := len(s.compensations) - 1; i >= 0; i-- {
 		// Keep going on failure so every completed step gets a chance to be undone.
 		if err := s.compensations[i](disconnectedCtx); err != nil {
-			workflow.GetLogger(ctx).Error("Compensation failed", zap.Error(err))
 			errs = append(errs, err)
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/cadence"
 	"go.uber.org/cadence/activity"
 	"go.uber.org/cadence/encoded"
 	"go.uber.org/cadence/testsuite"
@@ -39,6 +40,13 @@ func runSaga(t *testing.T, input SagaInput) (env *testsuite.TestWorkflowEnvironm
 	return env, forward, compensated
 }
 
+// requireStepFailed checks that err is the original step error.
+func requireStepFailed(t *testing.T, err error) {
+	var customErr *cadence.CustomError
+	require.True(t, errors.As(err, &customErr), "want *cadence.CustomError, got %T: %v", err, err)
+	assert.Equal(t, "step-failed", customErr.Reason())
+}
+
 func TestSagaWorkflow_Success(t *testing.T) {
 	env, forward, compensated := runSaga(t, SagaInput{FailAtStep: 0})
 
@@ -50,7 +58,7 @@ func TestSagaWorkflow_Success(t *testing.T) {
 func TestSagaWorkflow_LastStepFails_CompensatesInReverseOrder(t *testing.T) {
 	env, forward, compensated := runSaga(t, SagaInput{FailAtStep: 3})
 
-	assert.Error(t, env.GetWorkflowError())
+	requireStepFailed(t, env.GetWorkflowError())
 	assert.Equal(t, []int{1, 2, 3}, forward)
 	assert.Equal(t, []int{2, 1}, compensated, "only completed steps are undone, newest first")
 }
@@ -58,7 +66,7 @@ func TestSagaWorkflow_LastStepFails_CompensatesInReverseOrder(t *testing.T) {
 func TestSagaWorkflow_FirstStepFails_NothingToCompensate(t *testing.T) {
 	env, forward, compensated := runSaga(t, SagaInput{FailAtStep: 1})
 
-	assert.Error(t, env.GetWorkflowError())
+	requireStepFailed(t, env.GetWorkflowError())
 	assert.Equal(t, []int{1}, forward)
 	assert.Empty(t, compensated)
 }
@@ -89,7 +97,7 @@ func TestSagaWorkflow_FailedCompensationDoesNotStopTheOthers(t *testing.T) {
 
 	require.True(t, env.IsWorkflowCompleted())
 	err := env.GetWorkflowError()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "undo step 2 failed")
+	requireStepFailed(t, err)
+	assert.NotContains(t, err.Error(), "undo step 2 failed", "compensation errors are logged, not returned")
 	env.AssertExpectations(t)
 }

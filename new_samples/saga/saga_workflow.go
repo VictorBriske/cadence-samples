@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -43,7 +42,7 @@ func SagaWorkflow(ctx workflow.Context, input SagaInput) error {
 		if err != nil {
 			logger.Error("Step failed, compensating completed steps", zap.Int("step", step), zap.Error(err))
 			if compensationErr := saga.Compensate(ctx); compensationErr != nil {
-				return errors.Join(err, compensationErr)
+				logger.Error("Compensation failed", zap.Error(compensationErr))
 			}
 			return err
 		}
